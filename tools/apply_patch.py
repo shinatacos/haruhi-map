@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Idempotently add Google-only map routing without modifying itinerary JSON."""
+"""Legacy migration guard. Preserve the explicit provider-geometry renderer in current versions."""
 import re
 import sys
 from pathlib import Path
@@ -33,11 +33,14 @@ js=js.replace('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
 straight_pattern=r'L\.polyline\(\[\[r\.from\.lat,r\.from\.lon\],\[r\.to\.lat,r\.to\.lon\]\],[\s\S]*?\.addTo\(routeLayer\);'
 js,count=re.subn(straight_pattern,'/* Google Maps provides the actual route: never draw coordinate-to-coordinate straight lines. */',js)
 if count>2:raise RuntimeError('Unexpected number of straight-line calls. Review app.js manually')
-if re.search(r'L\s*\.\s*polyline\s*\(',js):
+provider_call="L.polyline(part.coords,{color:({walking:'#15803d',rail:'#6d28d9',bus:'#d97706',transit_other:'#64748b',driving:'#2563eb',bicycling:'#0891b2'})[part.kind],weight:5,opacity:.85}).addTo(routeLayer);"
+provider_renderer=js.count(provider_call)==1 and 'drawRoutes:routes=>' in js and '// Provider geometry is drawn through RouteNotebook.drawRoutes; no straight-line fallback.' in js
+checked_js=js.replace(provider_call,'') if provider_renderer else js
+if re.search(r'L\s*\.\s*polyline\s*\(',checked_js):
     raise RuntimeError('Unmatched polyline remains; no files written. Review source manually.')
 if re.search(r'id=["\']showRoute["\'][^>]*checked',html):
     raise RuntimeError('Checked straight-line control remains; no files written.')
-if count==0 and 'No coordinate-to-coordinate route layer' not in js and 'never draw coordinate-to-coordinate straight lines' not in js:
+if count==0 and not provider_renderer and 'No coordinate-to-coordinate route layer' not in js and 'never draw coordinate-to-coordinate straight lines' not in js:
     raise RuntimeError('Zero renderer matches without a verified disabled renderer; no files written.')
 index.write_text(html,encoding='utf-8')
 app.write_text(js,encoding='utf-8')

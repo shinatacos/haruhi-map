@@ -10,10 +10,28 @@ threading.Thread(target=server.serve_forever,daemon=True).start()
 with sync_playwright() as pw:
  browser=pw.chromium.launch(executable_path=os.environ.get('CHROME_PATH',r'C:\Program Files\Google\Chrome\Application\chrome.exe'),headless=True)
  page=browser.new_page(accept_downloads=True)
- errors=[]
- page.on('pageerror',lambda e:errors.append(str(e)))
+ errors=[];startup_network=[]
+ page.on('pageerror',lambda e:errors.append(e.stack or str(e)))
+ page.on('requestfailed',lambda r:startup_network.append({'url':r.url,'failure':r.failure}))
+ page.on('response',lambda r:startup_network.append({'url':r.url,'status':r.status}) if r.status>=400 else None)
  page.goto(f'http://127.0.0.1:{server.server_port}/',wait_until='networkidle')
- page.wait_for_selector('[data-event]')
+ try:
+  page.wait_for_selector('[data-event]')
+ except Exception:
+  out=root/'tests/artifacts';out.mkdir(exist_ok=True)
+  page.screenshot(path=str(out/'revision-startup-failure.png'))
+  (out/'revision-startup-failure.html').write_text(page.content(),encoding='utf-8')
+  print('Startup JS errors:',errors)
+  print('Startup network failures:',startup_network)
+  print('Startup state:',page.evaluate('''() => ({
+   url:location.href,readyState:document.readyState,
+   core:typeof RouteCore,seed:typeof ROUTE_SEED,notebook:typeof RouteNotebook,
+   eventCount:document.querySelectorAll('[data-event]').length,
+   scheduleDisplay:getComputedStyle(document.querySelector('#schedulePanel')).display,
+   viewport:{width:innerWidth,height:innerHeight}
+  })'''))
+  print('Startup DOM:',page.locator('body').inner_text())
+  raise
  page.locator('[data-event]').first.click()
  page.locator('#f_時刻').fill('09:07')
  page.locator('#editForm button[type=submit]').click()
@@ -122,16 +140,16 @@ with sync_playwright() as pw:
  pub=public.new_page()
  pub.add_init_script('localStorage.setItem('+json.dumps(key)+', '+json.dumps(json.dumps(get()))+')')
  pub.goto('https://route-notebook.test/',wait_until='networkidle')
- assert not pub.locator('#importBtn').is_visible()
- assert not pub.locator('#addEventBtn').is_visible()
- assert '閲覧専用' in pub.locator('#saveStatus').inner_text()
+ assert pub.locator('#importBtn').is_visible()
+ assert pub.locator('#addEventBtn').is_visible()
+ assert 'ブラウザ' in pub.locator('#saveStatus').inner_text()
  pub.locator('[data-event]').first.click()
- assert not pub.locator('#commitBtn').is_visible()
- assert pub.locator('#editFields input').count()==0
+ assert pub.locator('#commitBtn').is_visible()
+ assert pub.locator('#editFields input').count()>0
  assert pub.locator('meta[name=robots]').get_attribute('content').startswith('noindex')
  public.close()
  print('Leaflet loaded:',page.evaluate('typeof L!=="undefined"'))
  assert not errors,errors
  browser.close()
 server.shutdown()
-print('PASS: editing, persistence, filters, exports, validation, restore, merge conflicts, backup, marker drag, mobile dates, public view-only')
+print('PASS: editing, persistence, filters, exports, validation, restore, merge conflicts, backup, marker drag, mobile dates, public browser editing')

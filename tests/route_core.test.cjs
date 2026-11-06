@@ -58,11 +58,11 @@ test('segments follow timeline and never connect days, plans or trips',()=>{
  assert.equal(C.segments(seed,es)[0].from.id,a.id);
  es[1].day='11/20';assert.equal(C.segments(seed,es).length,0);es[1].day='11/19';es[1].plan='B';assert.equal(C.segments(seed,es).length,0);
 });
-test('KML escapes XML and includes every place with straight-line disclaimer',()=>{
+test('KML escapes XML and includes every place without straight-line routes',()=>{
  const d=clone(seed);d.points[0].name='<A & B>';const k=C.kml(d);
- assert.ok(k.includes('&lt;A &amp; B&gt;'));assert.ok(k.includes('straight-reference'));
+ assert.ok(k.includes('&lt;A &amp; B&gt;'));assert.ok(!k.includes('<LineString>'));
  for(const p of seed.points)assert.ok(k.includes('<value>'+p.id+'</value>'));
- assert.ok(k.includes('鉄道路線や所要時間ではありません'));
+ assert.ok(!k.includes('<LineString>'));
 });
 
 test('full restores reject unsafe keys and noncanonical dates',()=>{

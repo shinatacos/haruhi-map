@@ -69,7 +69,7 @@
   if (!state.key && typeof root.ROUTE_GOOGLE_EMBED_KEY === 'string') state.key = root.ROUTE_GOOGLE_EMBED_KEY.trim();
   let from = '', to = '', mode = 'transit', leg = '', data = null, points = [], dialog = null;
   const $ = id => doc.getElementById('rg-' + id);
-  const safeSave = () => { try { localStorage.setItem(STORE,JSON.stringify(state)); return true; } catch (_) { return false; } };
+  const safeSave = () => { try { localStorage.setItem(STORE,JSON.stringify(state)); root.dispatchEvent(new Event('notebook-fares')); return true; } catch (_) { return false; } };
   const pointById = id => points.find(p => String(p.id) === id);
   const selected = () => [pointById(from), pointById(to)];
   const selectedKey = () => [leg || (from+'|'+to),mode].join('|');
@@ -135,7 +135,7 @@
     </div>`;
     $('close').onclick = () => dialog.close();
     $('leg').onchange = () => { const v = $('leg').value; leg=''; if (v !== '' && legs[Number(v)]) {
-      leg=String(legs[+v].eventId||'');from=String(legs[+v].from);to=String(legs[+v].to); $('from').value=from;$('to').value=to; } refresh(); };
+      leg=String(legs[+v].eventId||'');from=String(legs[+v].from);to=String(legs[+v].to); $('from').value=from;$('to').value=to; const ev=data.events.find(e=>e.id===leg);mode=root.RouteCore?.modeOf(ev||{})==='walking'?'walking':'transit';$('mode').value=mode; } refresh(); };
     $('from').value=from; $('to').value=to; $('mode').value=mode; $('key').value=state.key;
     $('from').onchange = () => {leg='';$('leg').value='';from=$('from').value;refresh();};
     $('to').onchange = () => {leg='';$('leg').value='';to=$('to').value;refresh();};
@@ -146,8 +146,9 @@
     $('add-pass').onclick=addPass;
     $('export').onclick=exportJSON;
     renderPassList(); refresh();
-    if (typeof dialog.showModal === 'function') dialog.showModal(); else dialog.setAttribute('open','');
+    if (typeof dialog.showModal === 'function' && !dialog.open) dialog.showModal(); else dialog.setAttribute('open','');
   }
+  root.addEventListener('notebook-change',()=>{if(dialog?.open){dialog.close();open();}});
   function refresh() {
     const [a,b] = selected(); if (!a || !b) {
       $('warning').textContent='選択中の旅行に地点がありません。地点を登録してから経路を選んでください。';

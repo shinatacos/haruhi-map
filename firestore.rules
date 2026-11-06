@@ -1,0 +1,16 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid}/notebooks/main {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['json', 'revision', 'updatedAt'])
+        && request.resource.data.json is string
+        && request.resource.data.json.size() <= 850000
+        && request.resource.data.revision is string
+        && request.resource.data.revision.size() <= 100
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+  }
+}
