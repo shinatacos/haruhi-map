@@ -11,7 +11,7 @@
   const place = p => {
     if (!p) return '';
     // Avoid treating the approximate coordinates of a scene as a verified entrance.
-    if (confirmed(p) && validCoords(p)) return coord(p);
+    if ((root.RouteCore?.restricted(p) || confirmed(p)) && validCoords(p)) return coord(p);
     return [p.name, p.address].filter(Boolean).join(' ') || (validCoords(p) ? coord(p) : '');
   };
   function mapsUrl(origin, destination, mode) {
@@ -35,8 +35,9 @@
   const yen = n => '¥' + Number(n).toLocaleString('ja-JP');
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const sortedEvents = (events) => events.slice().sort((a,b) => {
-    const d = x => String(x.day||'').replace(/^(\d\d?)\/(\d\d?)$/,(_,m,day)=>'2026-'+m.padStart(2,'0')+'-'+day.padStart(2,'0'));
-    return d(a).localeCompare(d(b)) || (+a.order||0)-(+b.order||0) || String(a.time||'').localeCompare(String(b.time||''));
+    const d = x => String(x.day||'').split('/').map(v=>v.padStart(2,'0')).join('/');
+    return d(a).localeCompare(d(b)) || String(a.time||'').localeCompare(String(b.time||'')) ||
+      (Number.isFinite(a.order) && Number.isFinite(b.order) ? a.order-b.order : 0) || String(a.id).localeCompare(String(b.id));
   });
   function legsOf(data, tripId, plan, day) {
     const pts = new Map(data.points.map(p => [p.id, p]));
@@ -72,21 +73,11 @@
   const pointById = id => points.find(p => String(p.id) === id);
   const selected = () => [pointById(from), pointById(to)];
   const selectedKey = () => [leg || (from+'|'+to),mode].join('|');
-  const getCurrentData = () => {
-    try {
-      // The existing editor persists its database only in its local owner mode.
-      if (root.ROUTE_CONFIG?.owner === true && root.location.hostname === '127.0.0.1') {
-        const local = JSON.parse(localStorage.getItem('haruhi-pilgrimage-map:v1') || 'null');
-        if (local?.points?.length && local?.events?.length) return local;
-      }
-    } catch (_) {}
-    return root.HARUHI_SEED || {points:[],events:[],trips:[]};
-  };
+  const getCurrentData = () => root.RouteNotebook?.getSnapshot() || {points:[],events:[],trips:[]};
   function init() {
     data = getCurrentData();
     points = Array.isArray(data.points) ? data.points.filter(p=>p && p.id && p.name) : [];
-    if (!points.length) return;
-    const toolbar = doc.querySelector('.mast-actions, .map-toolbar-right, header');
+    const toolbar = doc.querySelector('.mast-actions') || doc.querySelector('.map-toolbar-right') || doc.querySelector('header');
     const launch = doc.createElement('button');
     launch.id = 'rg-launch'; launch.type = 'button'; launch.textContent = '🗺 Google経路';
     launch.setAttribute('aria-haspopup','dialog');
@@ -95,25 +86,23 @@
     dialog.setAttribute('aria-label', 'Google経路・運賃メモ');
     doc.body.append(dialog);
     launch.addEventListener('click', open);
-    // Hide unsupported straight-line route drawing in the current Leaflet view.
-    const straight = doc.getElementById('showRoute');
-    if (straight) { straight.checked = false; straight.dispatchEvent(new Event('change',{bubbles:true}));
-      straight.closest('label')?.setAttribute('hidden',''); }
+
   }
   function open() {
     leg = '';
     data = getCurrentData(); points = (data.points||[]).filter(p=>p && p.id && p.name);
-    if (!points.length) return;
-    if (!from || !pointById(from)) from = String(points[0].id);
-    if (!to || !pointById(to)) to = String(points.find(p=>p.id!==from)?.id || points[0].id);
-    const tripId = doc.getElementById('tripSelect')?.value || (data.trips?.[0]?.id || 'legacy');
-    const plan = doc.getElementById('planSelect')?.value || '';
-    const day = doc.getElementById('daySelect')?.value || 'all';
+    const selection=data.selection || {};
+    points=points.filter(p=>(p.tripId||'legacy')===selection.tripId);
+    if (!from || !pointById(from)) from = String(points[0]?.id || '');
+    if (!to || !pointById(to)) to = String(points.find(p=>p.id!==from)?.id || points[0]?.id || '');
+    const tripId = selection.tripId;
+    const plan = selection.plan;
+    const day = selection.day;
     const legs = legsOf(data,tripId,plan,day);
     const option = (value,label,active)=>`<option value="${esc(value)}" ${active?'selected':''}>${esc(label)}</option>`;
     const pointOptions = points.map(p=>option(p.id,p.name+(confirmed(p)?'':' ⚠位置要確認'),false)).join('');
     const routeOptions = '<option value="">任意の2地点を指定</option>' + legs.map((x,i)=>option(i,`${x.day} ${x.time||''}｜${pointById(x.from)?.name||x.from} → ${pointById(x.to)?.name||x.to}`,false)).join('');
-    dialog.innerHTML = `<div class="rg-head"><div><h2>Googleマップ 実経路</h2><small>OSMの概略直線ではなくGoogleの経路を表示</small></div><button id="rg-close" type="button" aria-label="閉じる">×</button></div>
+    dialog.innerHTML = `<div class="rg-head"><div><h2>Googleマップ 実経路</h2><small>現在選択中の旅程から徒歩・公共交通を検索</small></div><button id="rg-close" type="button" aria-label="閉じる">×</button></div>
     <div class="rg-body">
       <div class="rg-forms">
         <label class="rg-wide">既存旅程から区間を選択<select id="rg-leg">${routeOptions}</select></label>
@@ -124,7 +113,7 @@
       </div>
       <div id="rg-warning" class="rg-info"></div>
       <div class="rg-actions"><a id="rg-open" class="rg-action-primary" target="_blank" rel="noopener noreferrer">Googleマップで経路候補を見る ↗</a><button type="button" id="rg-remove-key">端末のキーを消去</button></div>
-      <div id="rg-map-area" class="rg-map-area"></div>
+      <div id="rg-map-area" class="rg-map-area"></div><p class="rg-info">埋め込みが拒否された場合はキーのAPI制限・HTTPリファラー・請求先を確認し、上のGoogleマップで開いてください。外部iframeの認証成功はこのサイトから判定できません。</p>
       <p class="rg-info">埋め込みはGoogle Maps Embed API（API利用料0円、Google Cloudキーと請求先登録が必要）。鉄道優先／バス優先、日時指定、複数候補の詳細選択はGoogleマップ内で操作してください。サイト側では自動運賃取得をしていません。</p>
       <section class="rg-section"><h3>区間の交通費メモ</h3>
         <div class="rg-forms"><label>確認した支払額（円）<input id="rg-fare" type="number" min="0" step="1" placeholder="未確認は空欄" /></label>
@@ -145,11 +134,11 @@
       </section>
     </div>`;
     $('close').onclick = () => dialog.close();
-    $('leg').onchange = () => { const v = $('leg').value; if (v !== '' && legs[Number(v)]) {
-      leg=String(legs[+v].eventId||'');from=String(legs[+v].from);to=String(legs[+v].to); $('from').value=from;$('to').value=to; refresh(); } };
+    $('leg').onchange = () => { const v = $('leg').value; leg=''; if (v !== '' && legs[Number(v)]) {
+      leg=String(legs[+v].eventId||'');from=String(legs[+v].from);to=String(legs[+v].to); $('from').value=from;$('to').value=to; } refresh(); };
     $('from').value=from; $('to').value=to; $('mode').value=mode; $('key').value=state.key;
-    $('from').onchange = () => {leg='';from=$('from').value;refresh();};
-    $('to').onchange = () => {leg='';to=$('to').value;refresh();};
+    $('from').onchange = () => {leg='';$('leg').value='';from=$('from').value;refresh();};
+    $('to').onchange = () => {leg='';$('leg').value='';to=$('to').value;refresh();};
     $('mode').onchange = () => {mode=$('mode').value;refresh();};
     $('key').onchange = () => {state.key=$('key').value.trim();safeSave();refresh();};
     $('remove-key').onclick=()=>{state.key='';$('key').value='';safeSave();refresh();};
@@ -160,7 +149,11 @@
     if (typeof dialog.showModal === 'function') dialog.showModal(); else dialog.setAttribute('open','');
   }
   function refresh() {
-    const [a,b] = selected(); if (!a || !b) return;
+    const [a,b] = selected(); if (!a || !b) {
+      $('warning').textContent='選択中の旅行に地点がありません。地点を登録してから経路を選んでください。';
+      $('open').removeAttribute('href');$('open').setAttribute('aria-disabled','true');return;
+    }
+    $('open').removeAttribute('aria-disabled');
     const origin=place(a),destination=place(b);
     const link=mapsUrl(origin,destination,mode);
     const url = new URL(link);
@@ -172,11 +165,12 @@
     if (!confirmed(b)) missing.push('目的地点');
     $('warning').textContent = missing.length ? `⚠ ${missing.join('と')}の撮影位置は未検証。Googleの施設名検索先と訪問目的地が一致しているか確認してください。` : '座標確認済の地点を使用。入口・撮影位置の精度は別途確認してください。';
     $('map-area').replaceChildren();
-    if (state.key) {
+    if (state.key && /^https?:$/.test(root.location.protocol)) {
       const frame=doc.createElement('iframe');frame.title='Google Maps：経路';frame.loading='lazy';frame.referrerPolicy='strict-origin-when-cross-origin';
+      frame.addEventListener('error',()=>{$('warning').textContent='埋め込みを読み込めません。Googleマップで開いてください。';});
       frame.allowFullscreen=true;frame.src=embedUrl(state.key,a.placeId?'place_id:'+a.placeId:origin,b.placeId?'place_id:'+b.placeId:destination,mode);$('map-area').append(frame);
     } else {
-      const msg=doc.createElement('div'); msg.className='rg-empty';msg.textContent='Google地図のサイト内表示はAPIキー設定後に有効になります。キーなしの場合も上のボタンから無料でGoogleマップの経路検索を開けます。';
+      const msg=doc.createElement('div'); msg.className='rg-empty';msg.textContent='サイト内表示にはMaps Embed APIキー、API有効化、請求先登録、現在のHTTPリファラーの許可が必要です。file://では利用できません。上のGoogleマップボタンはキー不要です。';
       $('map-area').append(msg);
     }
     const saved=state.fares[selectedKey()];

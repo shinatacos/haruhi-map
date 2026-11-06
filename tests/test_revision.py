@@ -118,7 +118,7 @@ with sync_playwright() as pw:
  # Public origin is simulated locally; no deployment or network write occurs.
  public=browser.new_context()
  public.route('https://route-notebook.test/**',lambda route:route.fulfill(
-  path=str(root/(route.request.url.split('route-notebook.test/')[1] or 'index.html'))))
+  path=str(root/(route.request.url.split('route-notebook.test/')[1].split('?')[0] or 'index.html'))))
  pub=public.new_page()
  pub.add_init_script('localStorage.setItem('+json.dumps(key)+', '+json.dumps(json.dumps(get()))+')')
  pub.goto('https://route-notebook.test/',wait_until='networkidle')

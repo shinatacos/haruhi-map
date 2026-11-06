@@ -31,3 +31,5 @@
 @media(max-width:850px){.map-main{--map-toolbar-height:49px}.map-main>#map{min-height:180px}}
 
 #rg-dialog [hidden], .switchline[hidden] {display:none!important}
+
+#rg-dialog[open]{display:flex;flex-direction:column}#rg-dialog .rg-head{flex:0 0 auto}#rg-dialog .rg-body{flex:1 1 auto;min-height:0;height:auto}
