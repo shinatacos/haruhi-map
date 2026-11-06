@@ -1,57 +1,31 @@
 <!doctype html>
-<html lang="ja">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light">
-<title>巡礼ナビ | ハルヒ × 美少女ゲーム 2026</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="styles.css">
-</head>
-<body>
-<div class="app">
-  <header class="masthead">
-    <div class="brand"><span class="brand-mark">巡</span><div><div class="eyebrow">PILGRIMAGE STUDIO · 2026</div><h1>関西 聖地巡礼マップ <small>編集版</small></h1></div></div>
-    <div class="mast-actions">
-      <span class="save-status" id="saveStatus">● ローカル保存</span>
-      <button class="btn btn-ghost" id="importBtn" title="保存したJSONを読み込む">読み込み</button>
-      <button class="btn btn-outline" id="exportBtn">エクスポート ▾</button>
-      <button class="btn btn-primary" id="addPointBtn">＋ 地点を追加</button>
-    </div>
-  </header>
-  <div class="workspace">
-    <aside class="sidebar">
-      <div class="sidebar-intro">
-        <div class="intro-row"><div><div class="eyebrow">TRAVEL CONTROL CENTER</div><h2>旅程を組み立てる</h2></div><span class="date-chip">11/18 → 11/22</span></div>
-        <p>ピンや予定を直接編集。変更はこのブラウザに自動保存します。</p>
-        <div class="filters">
-          <label>旅程案<select id="planSelect"><option value="SOS展改訂">SOS展入り 改訂案</option><option value="旧旅程">旧・分刻み旅程</option></select></label>
-          <label>日付<select id="daySelect"><option value="11/18">11/18（水）</option><option value="11/19">11/19（木）</option><option value="11/20">11/20（金）</option><option value="11/21">11/21（土）</option><option value="11/22">11/22（日）延長</option><option value="all">全日程</option></select></label>
-        </div>
-        <div class="metrics"><div><b id="pointCount">—</b><span>地点</span></div><div><b id="eventCount">—</b><span>予定</span></div><div><b id="visitCount">—</b><span>訪問済</span></div></div>
-      </div>
-      <div class="tabs" role="tablist"><button class="tab active" data-tab="schedule">時刻表・行程</button><button class="tab" data-tab="points">スポット一覧</button><button class="tab" data-tab="guide">使い方</button></div>
-      <div id="schedulePanel" class="panel active"><div class="panel-tools"><div class="panel-title">予定 <small id="eventShowing"></small></div><button class="btn btn-small btn-primary-soft" id="addEventBtn">＋ 行程</button></div><div id="scheduleList" class="scroll-list"></div></div>
-      <div id="pointsPanel" class="panel"><div class="panel-tools"><div class="panel-title">地点 <small id="pointShowing"></small></div><button class="btn btn-small" id="addPointListBtn">＋ 新規</button></div><div class="search-wrap"><input id="pointSearch" type="search" placeholder="作品・地名・駅名で検索"></div><div class="search-wrap"><select id="areaSelect"><option value="all">すべての地域</option></select></div><div id="pointList" class="scroll-list"></div></div>
-      <div id="guidePanel" class="panel"><div class="guide-text"><h3>直接できること</h3><p>地点をタップして編集。位置変更ボタンでピンをドラッグできます。地図をクリックして新しい地点を追加することもできます。</p><h3>Codexとの連携</h3><p>同梱の <code>CODEX_TASK.md</code> をCodexに渡し、<code>data/points.json</code> と <code>data/schedule.json</code> を編集してもらってください。</p><h3>データの保管</h3><p>編集はブラウザ内に自動保存されます。別の端末・ブラウザへの移行、Codexへの受け渡しは、右上の「エクスポート → 編集用JSON」を利用してください。</p><h3>旅行の前提（計画・当日条件は要確認）</h3><p>11/18夜に藤沢を出発、11/19早朝に大阪駅前で夜行バスを降車。11/19・11/20はエスカル神戸に宿泊。11/21 15:00から北高公開に参加予定、同日のSOS展も候補。ノートPC・一眼カメラ・着替えを携行。</p><h3>注意</h3><p>表示時刻は計画値を含みます。公式ダイヤ・実測は編集画面の出典を確認してください。北高・住宅周辺の代表点は撮影位置や立入許可を示しません。公道から参照し現地の制限に従ってください。</p><p>赤・点線などは実移動経路ではなく地点間の直線です。詳細な住宅地のカットは概略ピンが含まれます。第三者の住宅・学校周辺での撮影には現地ルールを適用してください。</p><button class="btn btn-outline" id="resetBtn">最初のデータに戻す</button></div></div>
-      <div class="sidebar-foot"><span>● 地点座標には概略位置を含みます</span><span>2026.11 旅行計画</span></div>
-    </aside>
-    <main class="map-main">
-      <div class="map-toolbar">
-        <div class="map-toolbar-left"><span class="map-heading" id="mapHeading">11/19 · 巡礼マップ</span><span class="muted" id="mapSubHeading">ピンを選択して編集</span></div>
-        <div class="map-toolbar-right"><label class="switchline"><input type="checkbox" id="showAllPoints"> 全地点</label><label class="switchline"><input type="checkbox" id="showRoute" checked> 訪問順の直線</label><button class="btn btn-small" id="fitBtn">地図を合わせる</button></div>
-      </div>
-      <div id="map" role="application" aria-label="編集できる聖地巡礼マップ"></div>
-      <div id="mapFallback" class="map-fallback" hidden><h3>地図タイルを読み込めません</h3><p>ネット接続を確認してください。左側の時刻表・地点一覧は利用できます。</p></div>
-      <div class="map-legend"><span><i class="dot dot-purple"></i> ハルヒ</span><span><i class="dot dot-pink"></i> 美少女ゲーム</span><span><i class="dot dot-blue"></i> 交通・宿泊</span><span><i class="dot dot-amber"></i> 要位置確認</span></div>
-      <div class="map-message" id="mapMessage">直線は訪問順の参考線です。徒歩・列車の実際の経路ではありません。</div>
-    </main>
-  </div>
-</div>
-<dialog id="editDialog"><form id="editForm" method="dialog"><div class="dialog-head"><div><div class="eyebrow" id="dialogEyebrow">EDIT LOCATION</div><h2 id="dialogTitle">地点を編集</h2></div><button type="button" class="close-btn" id="dialogClose" aria-label="閉じる">✕</button></div><div id="editFields"></div><div class="dialog-actions"><button type="button" class="btn btn-danger" id="deleteBtn">削除</button><span class="grow"></span><button type="button" class="btn btn-ghost" id="cancelBtn">キャンセル</button><button type="submit" class="btn btn-primary">保存する</button></div></form></dialog>
-<dialog id="exportDialog"><div class="dialog-head"><div><div class="eyebrow">SAVE & SHARE</div><h2>データをエクスポート</h2></div><button type="button" class="close-btn" id="exportClose">✕</button></div><div class="export-choices"><button data-export="json"><b>編集用JSON</b><small>全地点＋全行程＋変更内容。Codexへの受け渡しに最適</small></button><button data-export="backup"><b>置換前バックアップJSON</b><small>直前の読み込み・初期化前のデータを取得</small></button><button data-export="csv"><b>Google My Maps用 CSV</b><small>全地点。Excelでも開けるUTF-8 BOM</small></button><button data-export="schedule"><b>時刻表CSV</b><small>予定の時刻、訪問順、地点、メモを保存</small></button><button data-export="geojson"><b>GeoJSON</b><small>GIS・地図アプリ向け。座標と作品名を保持</small></button><button data-export="kml"><b>KML</b><small>Google My Maps にインポート</small></button></div><p class="dialog-note">編集内容はブラウザにも自動保存。ただし消去される場合があるため、定期的にJSONでバックアップしてください。</p></dialog>
-<input id="importFile" type="file" accept=".json,application/json" hidden>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="data/seed.js"></script>
-<script src="app.js"></script>
+<html lang="ja"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow, noarchive"><meta name="googlebot" content="noindex, nofollow, noarchive"><meta name="referrer" content="no-referrer">
+<meta name="description" content="Route Notebook — 地図と時系列で旅を記録する旅行ノート。"><title>Route Notebook</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="styles.css">
+</head><body data-mobile-view="schedule"><div class="app">
+<header class="masthead"><div class="brand"><span class="brand-mark">R</span><div><div class="eyebrow">MAPS · PLANS · MEMORIES</div><h1>Route Notebook</h1></div></div><div class="mast-actions"><span id="saveStatus" class="save-status" role="status">公開版・閲覧専用</span><button id="newTripBtn" class="btn owner-only">＋ 旅行</button><button id="importBtn" class="btn owner-only">JSON読込</button><button id="exportBtn" class="btn btn-outline">書き出し</button></div></header>
+<nav class="mobile-switch" aria-label="表示切り替え"><button data-view="schedule" class="active">時刻表</button><button data-view="map">地図</button></nav>
+<div class="workspace"><aside class="sidebar">
+<div class="sidebar-intro"><label class="trip-label" for="tripSelect">旅行ノート</label><div class="trip-row"><select id="tripSelect"></select><button id="editTripBtn" class="btn btn-small owner-only">旅行を編集</button></div><p id="tripSummary"></p><div class="filters"><label>旅程案<select id="planSelect"></select></label><label>日付<select id="daySelect"></select></label></div><div class="metrics"><div><b id="pointCount">—</b><span>地点</span></div><div><b id="eventCount">—</b><span>予定</span></div><div><b id="visitCount">—</b><span>訪問済</span></div></div></div>
+<div class="tabs"><button class="tab active" data-tab="schedule">時刻表</button><button class="tab" data-tab="points">地点</button><button class="tab" data-tab="routes">移動</button><button class="tab" data-tab="guide">My Maps・使い方</button></div>
+<section id="schedulePanel" class="panel active"><div class="panel-tools"><div class="panel-title">予定 <small id="eventShowing"></small></div><button id="addEventBtn" class="btn btn-small owner-only">＋ 予定</button></div><div id="scheduleList" class="scroll-list"></div></section>
+<section id="pointsPanel" class="panel"><div class="panel-tools"><div class="panel-title">地点 <small id="pointShowing"></small></div><button id="addPointListBtn" class="btn btn-small owner-only">＋ 地点</button></div><div class="search-wrap"><input id="pointSearch" type="search" aria-label="地点を検索" placeholder="地点名・作品・住所で検索"></div><div class="search-wrap"><select id="areaSelect" aria-label="地域"></select><select id="workSelect" aria-label="作品・分類"></select></div><div id="pointList" class="scroll-list"></div></section>
+<section id="routesPanel" class="panel"><div class="panel-tools"><div class="panel-title">区間ごとの経路検索</div></div><p class="panel-note">線は訪問順を結ぶ概略直線です。道路・鉄道路線には沿いません。時刻は計画値を含みます。公共交通の日時・候補便はGoogleマップで確認してください。</p><div id="routeList" class="scroll-list"></div></section>
+<section id="guidePanel" class="panel"><div class="guide-text">
+<h3>Google My Mapsへ持ち出す</h3><ol><li>「書き出し」で日付別または作品別KMLを保存。</li><li><a href="https://www.google.com/maps/d/" target="_blank" rel="noopener noreferrer">Google My Mapsを開く ↗</a>。Googleアカウントへのログインは手動です。</li><li>パソコンで地図を作成し「レイヤを追加」→「インポート」からKMLを選択。</li></ol>
+<p>KMLの線は概略直線で、My Mapsの経路レイヤーには変換されません。フォルダ構造が取り込まれない場合は、分類を一つ選んでKMLを保存し、レイヤごとに取り込んでください。</p>
+<h3>My Mapsで徒歩ルートを作る</h3><p>「移動」タブで出発地・目的地をコピーし、My Mapsの「ルートを追加」のA・Bへ貼り付け、移動手段を「徒歩」にします。公共交通は各区間のGoogleマップ経路リンクを使います。</p>
+<p><a href="https://support.google.com/mymaps/answer/3024836?hl=ja" target="_blank" rel="noopener noreferrer">公式インポート手順</a> · <a href="https://support.google.com/mymaps/answer/3502610?hl=ja" target="_blank" rel="noopener noreferrer">公式ルート作成手順</a></p>
+<h3>ローカル編集と公開</h3><p>公開版は閲覧専用です。ローカルでは <code>python -m http.server 8000 --bind 127.0.0.1</code> を起動し、http://127.0.0.1:8000/ を開きます。編集はこのブラウザだけに保存されます。JSONでバックアップしてください。ローカル判定は本人認証ではありません。共有データの更新は権限を持つGitHubアカウントの認証によって管理されます。</p>
+<h3>JSONとバックアップ</h3><p>全旅行JSONでバックアップ・復元できます。ChatGPTの差分旅程JSONは既存IDを更新し、新しいIDを追加します。省略された地点・予定は削除しません。仕様はリポジトリの <code>docs/ITINERARY_JSON.md</code> を参照してください。</p><p>ブラウザ保存とファイルは別です。旧版の編集も更新前にJSONで書き出し、所有者モードで読み込んでください。インポート・初期化前のバックアップは書き出しから取得できます。</p>
+<h3>旅行メモ</h3><p id="tripNote"></p><h3>位置と撮影</h3><p>概略地点は厳密な撮影位置ではありません。住宅・学校・私有地は公道から参照する代表点です。公道との座標照合は未検証です。立入・撮影条件と住民のプライバシーを優先してください。Googleの経路データは取得・保存していません。OSMの地図タイルを利用します。</p><button id="resetBtn" class="btn btn-danger owner-only">初期データに戻す</button>
+</div></section></aside>
+<main class="map-main"><div class="map-toolbar"><div class="map-toolbar-left"><span id="mapHeading" class="map-heading"></span><span id="mapSubHeading" class="muted"></span></div><div class="map-toolbar-right"><label class="map-day-label">日付 <select id="mapDaySelect" aria-label="地図の日付"></select></label><label class="switchline"><input id="showAllPoints" type="checkbox"> 全地点</label><label class="switchline"><input id="showRoute" type="checkbox" checked> 概略線</label><button id="fitBtn" class="btn btn-small">範囲を合わせる</button><button id="addPointBtn" class="btn btn-small owner-only">＋ 地点を配置</button></div></div><div id="map" aria-label="旅程マップ"></div><div id="mapFallback" class="map-fallback" hidden><h3>地図を読み込めません</h3><p>ネット接続を確認してください。時刻表・地点・書き出しは利用できます。</p></div><div class="map-legend"><span>🏨 ホテル</span><span>🚉 駅</span><span>📍 聖地・地点</span><span>🍴 飲食</span><span>🎟 イベント</span><span>点線枠＝概略位置</span></div><div id="mapMessage" class="map-message" role="status">訪問順の概略直線です。実際の道路・鉄道経路ではありません。</div></main>
+</div></div>
+<dialog id="editDialog"><form id="editForm"><div class="dialog-head"><div><div class="eyebrow" id="dialogEyebrow">NOTE DETAILS</div><h2 id="dialogTitle"></h2></div><button type="button" id="dialogClose" class="close-btn" aria-label="閉じる">✕</button></div><div id="editFields"></div><div class="dialog-actions"><button type="button" id="deleteBtn" class="btn btn-danger owner-only">削除</button><span class="grow"></span><button type="button" id="cancelBtn" class="btn">閉じる</button><button type="submit" id="commitBtn" class="btn btn-primary owner-only">保存</button></div></form></dialog>
+<dialog id="exportDialog"><div class="dialog-head"><h2>書き出し</h2><button id="exportClose" class="close-btn" aria-label="閉じる">✕</button></div><div class="export-choices"><label>KMLの分類<select id="kmlBy"><option value="day">日付別（選択中の旅程）</option><option value="work">作品・分類別（選択中の旅行）</option></select></label><label>対象<select id="kmlGroup"></select></label><button data-export="kml"><b>My Maps用KML</b><small>ピン＋訪問順の概略直線。位置精度・撮影注意付き</small></button><a class="btn" href="https://www.google.com/maps/d/" target="_blank" rel="noopener noreferrer">My Mapsへログイン・インポート ↗</a><button data-export="itinerary"><b>ChatGPT旅程JSON</b><small>再利用できる差分形式。元ID・出典・確認状態を保持</small></button><button data-export="json"><b>全旅行JSON（バックアップ）</b><small>全地点・全予定・旅行設定を保持</small></button><button data-export="backup"><b>置換前バックアップJSON</b></button><button data-export="csv"><b>全地点CSV</b></button><button data-export="schedule"><b>全予定CSV</b></button><button data-export="geojson"><b>全地点GeoJSON</b></button></div><p class="dialog-note">KMLは端末に保存されます。My Mapsへのアップロードと共有設定はご自身で行います。noindexは公開URLへのアクセスを禁止しません。</p></dialog>
+<dialog id="importDialog"><div class="dialog-head"><h2>JSONマージ・復元プレビュー</h2></div><p id="importSummary" class="dialog-note"></p><div id="importChanges"></div><div class="dialog-actions"><button id="importCancel" class="btn">中止</button><button id="importApply" class="btn btn-primary">選択した変更を適用</button></div></dialog><input id="importFile" type="file" accept=".json,application/json" hidden>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="lib/route-core.js"></script><script src="data/seed.js"></script><script src="app.js"></script>
 </body></html>

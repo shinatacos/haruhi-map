@@ -1,0 +1,6 @@
+.test-deps/
+__pycache__/
+*.pyc
+tests/artifacts/
+tests/result_*
+haruhi_map_editor_standalone.html

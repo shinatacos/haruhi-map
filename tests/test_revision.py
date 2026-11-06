@@ -8,7 +8,7 @@ os.chdir(root)
 server=ThreadingHTTPServer(('127.0.0.1',0),SimpleHTTPRequestHandler)
 threading.Thread(target=server.serve_forever,daemon=True).start()
 with sync_playwright() as pw:
- browser=pw.chromium.launch(executable_path=r'C:\Program Files\Google\Chrome\Application\chrome.exe',headless=True)
+ browser=pw.chromium.launch(executable_path=os.environ.get('CHROME_PATH',r'C:\Program Files\Google\Chrome\Application\chrome.exe'),headless=True)
  page=browser.new_page(accept_downloads=True)
  errors=[]
  page.on('pageerror',lambda e:errors.append(str(e)))
@@ -63,9 +63,28 @@ with sync_playwright() as pw:
  assert get()==exported
  page.once('dialog',lambda d:d.accept())
  page.locator('#importFile').set_input_files(root/'tests/result_json')
- page.wait_for_timeout(200)
+ page.wait_for_selector('#importDialog[open]')
+ page.locator('#importApply').click()
  assert get()==exported
  assert page.evaluate('(k)=>!!localStorage.getItem(k+":backup")',key)
+ # Partial import conflicts keep the current row unless explicitly selected.
+ event=get()['events'][0]
+ patch={'kind':'route-notebook-itinerary','version':1,'points':[],
+        'events':[{'id':event['id'],'time':'08:09'}]}
+ def upload(value):
+  page.locator('#importFile').set_input_files({'name':'patch.json','mimeType':'application/json','buffer':json.dumps(value).encode()})
+  page.wait_for_selector('#importDialog[open]')
+ upload(patch)
+ assert not page.locator('[data-merge]').first.is_checked()
+ page.locator('#importApply').click()
+ assert get()['events'][0]==event
+ upload(patch)
+ page.locator('[data-merge]').first.check()
+ page.locator('#importApply').click()
+ assert get()['events'][0]['time']=='08:09'
+ assert len(get()['events'])==250
+ assert get()['events'][0]['confidence']=='要確認'
+ assert page.evaluate('(k)=>JSON.parse(localStorage.getItem(k+":backup")).events[0].time',key)==event['time']
  # Exercise the actual Leaflet marker drag handler without external route services.
  page.locator('#showAllPoints').check()
  page.locator('[data-tab=points]').click()
@@ -85,8 +104,34 @@ with sync_playwright() as pw:
  page.wait_for_timeout(200)
  assert get()!=before,'Marker drag did not save'
  assert any(p['precision']=='手動調整（未検証）' for p in get()['points'])
+ # Mobile layout: date selection remains available in map mode.
+ page.set_viewport_size({'width':390,'height':844})
+ page.locator('[data-view=map]').click()
+ assert page.locator('#mapDaySelect').is_visible()
+ day=page.locator('#mapDaySelect option').nth(1).get_attribute('value')
+ page.locator('#mapDaySelect').select_option(day)
+ assert page.locator('#daySelect').input_value()==day
+ assert page.locator('#map').bounding_box()['height']>200
+ assert page.evaluate('document.documentElement.scrollWidth<=innerWidth')
+ page.locator('[data-view=schedule]').click()
+ assert page.locator('#daySelect').is_visible()
+ # Public origin is simulated locally; no deployment or network write occurs.
+ public=browser.new_context()
+ public.route('https://route-notebook.test/**',lambda route:route.fulfill(
+  path=str(root/(route.request.url.split('route-notebook.test/')[1] or 'index.html'))))
+ pub=public.new_page()
+ pub.add_init_script('localStorage.setItem('+json.dumps(key)+', '+json.dumps(json.dumps(get()))+')')
+ pub.goto('https://route-notebook.test/',wait_until='networkidle')
+ assert not pub.locator('#importBtn').is_visible()
+ assert not pub.locator('#addEventBtn').is_visible()
+ assert '閲覧専用' in pub.locator('#saveStatus').inner_text()
+ pub.locator('[data-event]').first.click()
+ assert not pub.locator('#commitBtn').is_visible()
+ assert pub.locator('#editFields input').count()==0
+ assert pub.locator('meta[name=robots]').get_attribute('content').startswith('noindex')
+ public.close()
  print('Leaflet loaded:',page.evaluate('typeof L!=="undefined"'))
  assert not errors,errors
  browser.close()
 server.shutdown()
-print('PASS: edit, persistence, add/delete, filters, 5 exports, JSON validation/roundtrip/backup; no page errors')
+print('PASS: editing, persistence, filters, exports, validation, restore, merge conflicts, backup, marker drag, mobile dates, public view-only')
